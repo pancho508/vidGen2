@@ -1,0 +1,673 @@
+Below are the two redesigned files for a 100% LOCAL AI video factory.
+These replace the previous cloud/API architecture so everything runs on your machine (except the optional final YouTube upload).
+
+They are written so VSCode + Copilot can generate the project correctly.
+
+You should place them here:
+
+/docs/SYSTEM_ARCHITECTURE.md
+/docs/ENGINEERING_TASK_BREAKDOWN.md
+
+
+⸻
+
+SYSTEM_ARCHITECTURE.md
+
+(LOCAL AI VERSION)
+
+Autonomous Local Book → YouTube Video Factory
+
+Goal
+
+Build a fully autonomous local system that converts books stored on the machine into 9-minute AI-generated YouTube summary videos.
+
+The system must run 24/7 without relying on cloud APIs.
+
+Inputs:
+
+EPUB
+PDF
+TXT
+
+Outputs:
+
+9 minute video summary
+AI generated narration
+AI generated images
+subtitles
+thumbnail
+
+
+⸻
+
+Core System Pipeline
+
+BOOK FILE
+   ↓
+TEXT EXTRACTION
+   ↓
+CHAPTER SEGMENTATION
+   ↓
+LOCAL LLM SUMMARY
+   ↓
+YOUTUBE SCRIPT GENERATION
+   ↓
+SCENE PLANNING
+   ↓
+AI IMAGE GENERATION
+   ↓
+VOICE GENERATION
+   ↓
+SUBTITLE GENERATION
+   ↓
+VIDEO ASSEMBLY
+   ↓
+THUMBNAIL GENERATION
+   ↓
+VIDEO OUTPUT
+
+
+⸻
+
+Local AI Stack
+
+Everything must run locally.
+
+Local LLM (AI Brain)
+
+Used for:
+	•	summarizing books
+	•	generating scripts
+	•	generating scene prompts
+	•	generating titles
+
+Runtime:
+
+Ollama
+
+Models supported:
+
+llama3:8b
+mistral:7b
+deepseek-coder
+qwen
+
+API endpoint:
+
+http://localhost:11434
+
+
+⸻
+
+Voice Generation
+
+Used for narration.
+
+Engine:
+
+XTTS v2
+
+Alternative engines:
+
+Coqui TTS
+Bark
+
+Output:
+
+narration.wav
+
+Stored in:
+
+/audio
+
+
+⸻
+
+Image Generation
+
+Used to generate scenes.
+
+Engine:
+
+Stable Diffusion XL
+
+Runtime:
+
+ComfyUI
+
+Alternative engines:
+
+Flux
+SDXL Lightning
+
+Example prompt:
+
+minimalist illustration explaining compound habits
+clean educational infographic
+white background
+
+Output:
+
+scene_001.png
+scene_002.png
+
+Stored in:
+
+/images
+
+
+⸻
+
+Subtitle Generation
+
+Engine:
+
+Whisper.cpp
+
+Input:
+
+narration.wav
+
+Output:
+
+subtitles.srt
+
+
+⸻
+
+Video Assembly
+
+Engine:
+
+FFmpeg
+
+Inputs:
+
+images
+audio narration
+subtitles
+background music
+
+Output:
+
+video.mp4
+
+Stored in:
+
+/videos
+
+
+⸻
+
+Thumbnail Generation
+
+Generated using same image model.
+
+Prompt example:
+
+Atomic Habits summary
+bold typography
+clean YouTube thumbnail
+high contrast colors
+
+Output:
+
+thumbnail.png
+
+
+⸻
+
+Storage Structure
+
+/books
+/audio
+/images
+/videos
+/thumbnails
+/subtitles
+/models
+
+
+⸻
+
+Software Components
+
+System modules:
+
+book_parser
+chapter_splitter
+summarizer
+script_generator
+scene_planner
+image_generator
+voice_generator
+subtitle_generator
+video_assembler
+thumbnail_generator
+pipeline_runner
+
+
+⸻
+
+Internal Service Architecture
+
+PipelineRunner
+      │
+      ├── BookParser
+      ├── ChapterSplitter
+      ├── SummarizerAgent
+      ├── ScriptAgent
+      ├── ScenePlannerAgent
+      ├── ImageGenerator
+      ├── VoiceGenerator
+      ├── SubtitleGenerator
+      ├── VideoAssembler
+      └── ThumbnailGenerator
+
+
+⸻
+
+Target Video Structure
+
+Length:
+
+8-10 minutes
+
+Script length:
+
+1200-1500 words
+
+Scene count:
+
+20 images
+
+Structure:
+
+HOOK
+INTRO
+IDEA 1
+IDEA 2
+IDEA 3
+LESSONS
+CONCLUSION
+
+
+⸻
+
+Automation
+
+The pipeline runs automatically.
+
+Scheduler:
+
+cron
+
+Example schedule:
+
+0 3 * * * run pipeline
+
+Output:
+
+1 video per day
+
+
+⸻
+
+Performance Estimate
+
+Typical runtime:
+
+script generation 5s
+voice generation 30s
+image generation 2 min
+video assembly 30s
+
+Total:
+
+~5 minutes per video
+
+
+⸻
+
+ENGINEERING_TASK_BREAKDOWN.md
+
+(LOCAL VERSION)
+
+Phase 0 — Project Setup
+
+Task 0.1
+
+Initialize repository.
+
+Node.js
+TypeScript
+pnpm
+
+
+⸻
+
+Task 0.2
+
+Create project structure.
+
+src
+books
+models
+audio
+images
+videos
+thumbnails
+subtitles
+
+
+⸻
+
+Task 0.3
+
+Install dependencies.
+
+axios
+pino
+fluent-ffmpeg
+pdf-parse
+ebooklib
+node-cron
+
+
+⸻
+
+Phase 1 — Book Processing
+
+Task 1.1
+
+Create module:
+
+bookParser.ts
+
+Responsibilities:
+
+load epub
+load pdf
+extract text
+
+
+⸻
+
+Task 1.2
+
+Create module:
+
+chapterSplitter.ts
+
+Responsibilities:
+
+split book into chapters
+clean text
+
+
+⸻
+
+Phase 2 — Local LLM Integration
+
+Task 2.1
+
+Create Ollama client.
+
+File:
+
+ollamaClient.ts
+
+Endpoint:
+
+http://localhost:11434/api/generate
+
+
+⸻
+
+Task 2.2
+
+Create summarizer module.
+
+File:
+
+summarizer.ts
+
+Functions:
+
+summarizeChapter()
+summarizeBook()
+
+
+⸻
+
+Phase 3 — Script Generation
+
+Task 3.1
+
+Create module:
+
+scriptGenerator.ts
+
+Function:
+
+generateYoutubeScript()
+
+Target:
+
+1500 word script
+
+
+⸻
+
+Phase 4 — Scene Planning
+
+Task 4.1
+
+Create module:
+
+scenePlanner.ts
+
+Function:
+
+script → scene prompts
+
+Output:
+
+20 prompts
+
+
+⸻
+
+Phase 5 — Image Generation
+
+Task 5.1
+
+Create module:
+
+imageGenerator.ts
+
+Integration:
+
+ComfyUI API
+
+Function:
+
+generateImage(prompt)
+
+
+⸻
+
+Phase 6 — Voice Generation
+
+Task 6.1
+
+Create module:
+
+voiceGenerator.ts
+
+Integration:
+
+XTTS
+
+Function:
+
+script → narration.wav
+
+
+⸻
+
+Phase 7 — Subtitle Generation
+
+Task 7.1
+
+Create module:
+
+subtitleGenerator.ts
+
+Integration:
+
+whisper.cpp
+
+Output:
+
+subtitles.srt
+
+
+⸻
+
+Phase 8 — Video Assembly
+
+Task 8.1
+
+Create module:
+
+videoAssembler.ts
+
+Pipeline:
+
+images
++
+audio
++
+subtitles
+
+Command example:
+
+ffmpeg
+
+
+⸻
+
+Phase 9 — Thumbnail Generation
+
+Task 9.1
+
+Create module:
+
+thumbnailGenerator.ts
+
+Integration:
+
+Stable Diffusion
+
+
+⸻
+
+Phase 10 — Pipeline Runner
+
+Task 10.1
+
+Create module:
+
+pipelineRunner.ts
+
+Pipeline order:
+
+parseBook
+splitChapters
+summarizeBook
+generateScript
+planScenes
+generateImages
+generateVoice
+generateSubtitles
+assembleVideo
+generateThumbnail
+
+
+⸻
+
+Phase 11 — Scheduler
+
+Task 11.1
+
+Add cron scheduler.
+
+Example:
+
+node-cron
+
+Schedule:
+
+run daily
+
+
+⸻
+
+Phase 12 — Logging
+
+Task 12.1
+
+Add logging.
+
+Library:
+
+pino
+
+Log:
+
+pipeline start
+pipeline end
+errors
+
+
+⸻
+
+Final Goal
+
+The system should automatically convert books into videos.
+
+BOOK
+↓
+SUMMARY
+↓
+SCRIPT
+↓
+VOICE
+↓
+IMAGES
+↓
+VIDEO
+↓
+THUMBNAIL
+
+Output directory:
+
+/videos
+
+
+⸻
+
+If you want, I can also give you one more file that will dramatically improve Copilot’s ability to build this system:
+
+LOCAL_AI_STACK_SETUP.md
+
+That file will include exact install commands for:
+	•	Ollama
+	•	Stable Diffusion
+	•	ComfyUI
+	•	XTTS
+	•	Whisper.cpp
+	•	FFmpeg
+
+So someone could clone your repo and turn their computer into a 24/7 AI video factory in under an hour.

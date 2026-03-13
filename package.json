@@ -1,0 +1,44 @@
+{
+  "name": "vidgen2",
+  "version": "1.0.0",
+  "description": "Local AI Video Factory - Convert books into YouTube videos entirely on your machine",
+  "type": "module",
+  "main": "dist/cli.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/cli.ts",
+    "process": "node dist/cli.js process",
+    "schedule": "node dist/cli.js schedule",
+    "logs": "node dist/cli.js logs",
+    "clean": "rm -rf dist",
+    "start": "npm run build && npm run process"
+  },
+  "keywords": [
+    "ai",
+    "video",
+    "automation",
+    "book-to-video",
+    "local-ai",
+    "ollama",
+    "stable-diffusion"
+  ],
+  "author": "pancho508",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.5",
+    "dotenv": "^16.3.1",
+    "epub-parser": "^0.1.7",
+    "fluent-ffmpeg": "^2.1.2",
+    "node-cron": "^3.0.2",
+    "pdf-parse": "^1.1.1",
+    "pino": "^8.17.2"
+  },
+  "devDependencies": {
+    "@types/fluent-ffmpeg": "^2.1.24",
+    "@types/node": "^20.10.6",
+    "@types/node-cron": "^3.0.11",
+    "@types/pdf-parse": "^1.1.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}
