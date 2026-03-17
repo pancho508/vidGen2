@@ -137,30 +137,55 @@ def main():
     with open(script_file, 'r') as f:
         script_content = f.read()
     
-    # Extract prompts from script
-    prompts = [
+    # Generate diverse prompts for visual scenes
+    base_prompts = [
         "Ancient library with golden light, philosophical books, intricate architecture",
         "A hero figure standing at a crossroads in misty mountains, dramatic lighting",
         "Swirling chaos and order in balance, dark and light intertwining, abstract cosmic",
         "A warrior battling a mythical dragon above stormy clouds, epic cinematic",
-        "A serene dawn over mountains with a figure of enlightenment, warm golden hour"
+        "A serene dawn over mountains with a figure of enlightenment, warm golden hour",
+        "Labyrinth of interconnected ideas, light pathways through darkness, Renaissance art",
+        "The tree of knowledge with roots and branches reaching infinitely, ethereal",
+        "A library of human consciousness, symbols and archetypes floating in space",
+        "Journey through mythological landscapes, ancient ruins and modern cities intertwined",
+        "The hero's transformation, chrysalis moment between old and new self",
+        "Symbolic representation of psychological growth and integration, Jung inspired",
+        "Hidden depths of the psyche revealed, cavern filled with symbols and light",
+        "Maps of meaning connecting all things, web of understanding,fractal patterns",
+        "The call to adventure echoing through canyons and valleys, epic landscape",
+        "Descent into the underworld with light breaking through darkness, mythic",
+        "Integration of shadow and light, yin yang cosmic dance, balance",
+        "The resurrection of the hero, rising from transformative fire, rebirth",
+        "Meeting with the mentor, wisdom passed through ages, ancient knowledge",
+        "The crossing of thresholds, doorways to new understanding, dimensional",
+        "Return home transformed, spiral of development, evolution of consciousness"
     ]
+    
+    # Use base prompts and repeat/vary them to match requested count
+    prompts = []
+    for i in range(num_images):
+        if i < len(base_prompts):
+            prompts.append(base_prompts[i])
+        else:
+            # Repeat with slight variation for extras
+            idx = i % len(base_prompts)
+            prompts.append(base_prompts[idx] + f" (variation {i // len(base_prompts)})")
     
     # Create images directory
     images_dir = Path(script_file).parent.parent / "images"
     images_dir.mkdir(exist_ok=True)
     
     print("\n" + "="*70)
-    print("🎨 GENERATING REAL IMAGES FOR VIDEO")
+    print(f"🎨 GENERATING {num_images} REAL IMAGES FOR VIDEO")
     print("="*70 + "\n")
     
     generated = []
-    for i in range(min(num_images, len(prompts))):
+    for i in range(num_images):
         scene_num = i + 1
         prompt = prompts[i]
         output_file = images_dir / f"scene_{scene_num:03d}.png"
         
-        print(f"Generating Scene {scene_num}...", end=" ", flush=True)
+        print(f"Generating Scene {scene_num:2d}/{num_images}...", end=" ", flush=True)
         generate_styled_image(prompt, scene_num, str(output_file))
         file_size = output_file.stat().st_size / 1024
         print(f"✓ ({file_size:.1f} KB)")

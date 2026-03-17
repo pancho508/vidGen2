@@ -18,7 +18,7 @@ export class OllamaClient {
     this.model = model;
     this.client = axios.create({
       baseURL: baseUrl,
-      timeout: 300000, // 5 minutes
+      timeout: 900000, // 15 minutes for long chapter summaries
     });
 
     logger.info({ baseUrl, model }, 'OllamaClient initialized');

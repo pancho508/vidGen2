@@ -138,7 +138,7 @@ def run_full_pipeline():
             f.write(f"file '{images[-1]}'\n")
             f.write(f"duration {time_per_image}\n")
         
-        # FFmpeg command
+        # FFmpeg command with faststart for streaming compatibility
         cmd = [
             'ffmpeg', '-y',
             '-f', 'concat', '-safe', '0', '-i', concat_file,
@@ -147,10 +147,12 @@ def run_full_pipeline():
             '-pix_fmt', 'yuv420p',
             '-c:a', 'aac',
             '-shortest',
+            '-movflags', '+faststart',
             str(video_file)
         ]
         
-        subprocess.run(cmd, check=True, capture_output=True, timeout=300)
+        print("   Running FFmpeg with faststart flag...\n")
+        subprocess.run(cmd, check=True, timeout=300)
         
         if video_file.exists():
             video_size = video_file.stat().st_size / 1024 / 1024
