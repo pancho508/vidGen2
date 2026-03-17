@@ -1,6 +1,7 @@
-import axios from 'axios';
+import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { createLogger } from '../utils/logger.js';
 import { config, outputDirs } from '../config/index.js';
 import { Scene, GeneratedImage } from '../types/index.js';
@@ -81,34 +82,82 @@ export class ImageGenerator {
   }
 
   /**
-   * Create a placeholder image (for testing without ComfyUI)
+   * Create a placeholder image using ffmpeg (for testing without ComfyUI)
    */
   private async createPlaceholderImage(outputPath: string, prompt: string): Promise<void> {
-    // Create a simple PNG placeholder using canvas-like approach
-    // For production, implement actual ComfyUI API integration
-    
-    // Write a minimal valid PNG file
-    // PNG header bytes for a 1x1 white pixel
-    const pngBuffer = Buffer.from([
-      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, // PNG signature
-      0x00, 0x00, 0x00, 0x0d, // IHDR chunk size
-      0x49, 0x48, 0x44, 0x52, // IHDR
-      0x00, 0x00, 0x05, 0x00, // width: 1280
-      0x00, 0x00, 0x02, 0xd0, // height: 720
-      0x08, 0x02, 0x00, 0x00, 0x00, // bit depth, color type, compression, filter, interlace
-      0x50, 0xe5, 0x9a, 0xd5, // CRC
-      // ... IDAT chunk - simplified
-      0x00, 0x00, 0x00, 0x19, // IDAT chunk size
-      0x49, 0x44, 0x41, 0x54,
-      0x78, 0x9c, 0x62, 0xf8, 0x0f, 0x00, 0x00, 0x01, 0x01, 0x01, 0x00,
-      0x18, 0xdd, 0x8d, 0xb4, 0x7c, 0x33, 0x2d, 0xb6, 0x35, 0x3d, // CRC
-      0x00, 0x00, 0x00, 0x00, // IEND chunk size
-      0x49, 0x45, 0x4e, 0x44, // IEND
-      0xae, 0x42, 0x60, 0x82, // CRC
-    ]);
+    try {
+      // Use ffmpeg to create a colored PNG with text overlay
+      // Different colors based on scene number for visual variety
+      const colors = ['#1a1a2e', '#16213e', '#0f3460', '#533483', '#e94560', '#2d728f', '#6ac3e6'];
+      const colorIndex = Math.floor(Math.random() * colors.length);
+      const bgColor = colors[colorIndex];
 
-    fs.writeFileSync(outputPath, pngBuffer);
-    logger.debug({ path: outputPath }, 'Placeholder image created');
+      // Create an image with ffmpeg (faster than creating PNG manually)
+      const command = `ffmpeg -f lavfi -i color=${bgColor}:s=1280x720:d=1 -vframes 1 -q:v 2 "${outputPath}" 2>&1 | grep -v "frame="`;
+
+      execSync(command, { stdio: 'pipe', timeout: 10000 });
+
+      logger.debug({ path: outputPath, color: bgColor }, 'Placeholder image created with ffmpeg');
+    } catch (error) {
+      logger.error({ error }, 'Failed to create placeholder image');
+      // Fallback: create a minimal valid PNG using ImageMagick or pure binary
+      this.createMinimalPNG(outputPath);
+    }
+  }
+
+  /**
+   * Create a minimal but valid PNG file (fallback)
+   */
+  private createMinimalPNG(outputPath: string): void {
+    // Create a 1280x720 gradient PNG using pure binary
+    // PNG signature + minimal IHDR + IDAT with basic gradient data
+    const width = 1280;
+    const height = 720;
+
+    // PNG header
+    const header = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+    // IHDR chunk
+    const ihdr = Buffer.alloc(25);
+    ihdr.write('IHDR'); // chunk type
+    ihdr.writeUInt32BE(width, 4); // width
+    ihdr.writeUInt32BE(height, 8); // height
+    ihdr[12] = 8; // bit depth
+    ihdr[13] = 2; // color type (RGB)
+    ihdr[14] = 0; // compression
+    ihdr[15] = 0; // filter
+    ihdr[16] = 0; // interlace
+
+    // Simplified color data - create dark image
+    const scanlineLength = width * 3 + 1; // RGB + filter byte
+    const imageData = Buffer.alloc(scanlineLength * height);
+    for (let y = 0; y < height; y++) {
+      const offset = y * scanlineLength;
+      imageData[offset] = 0; // filter type
+      for (let x = 0; x < width; x++) {
+        const pixelOffset = offset + 1 + x * 3;
+        imageData[pixelOffset] = 30 + (y % 50); // R
+        imageData[pixelOffset + 1] = 30 + (x % 50); // G
+        imageData[pixelOffset + 2] = 50 + ((x + y) % 50); // B
+      }
+    }
+
+    // Minimal IDAT
+    const zlibSync = require('zlib');
+    const compressed = zlibSync.deflateSync(imageData);
+
+    const idatHeader = Buffer.from([0x00, 0x00, 0x00, 0x00]);
+    idatHeader.writeUInt32BE(compressed.length, 0);
+    const idat = Buffer.concat([Buffer.from('IDAT'), compressed]);
+
+    // IEND
+    const iend = Buffer.from([0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]);
+
+    // Write file
+    const output = Buffer.concat([header, ihdr, idat, iend]);
+    fs.writeFileSync(outputPath, output);
+
+    logger.debug({ path: outputPath }, 'Minimal PNG created');
   }
 
   /**
@@ -116,37 +165,6 @@ export class ImageGenerator {
    */
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  /**
-   * ComfyUI API integration (for production use)
-   */
-  private async callComfyUIAPI(prompt: string): Promise<Buffer> {
-    // This would call the actual ComfyUI API endpoint
-    // Placeholder for proper implementation
-    try {
-      const response = await axios.post(
-        `${this.comfyUIUrl}/api/prompt`,
-        {
-          client_id: 'vidgen2',
-          prompt: {
-            1: {
-              inputs: {
-                text: prompt,
-              },
-              class_type: 'CLIPTextEncode',
-            },
-          },
-        },
-        { timeout: 120000 }
-      );
-
-      logger.debug({ promptId: response.data.prompt_id }, 'ComfyUI prompt submitted');
-      return response.data;
-    } catch (error) {
-      logger.error({ error }, 'Failed to call ComfyUI API');
-      throw error;
-    }
   }
 }
 

@@ -43,6 +43,7 @@ export interface YouTubeScript {
   wordCount: number;
   sections: ScriptSection[];
   estimatedTotalDuration: number;
+  scriptPath?: string;
 }
 
 // Scene planning types

@@ -55,6 +55,7 @@ export function getOutputDirs() {
   const root = getRootDir();
   return {
     books: path.join(root, 'books'),
+    scripts: path.join(root, 'scripts'),
     audio: path.join(root, 'audio'),
     images: path.join(root, 'images'),
     videos: path.join(root, 'videos'),

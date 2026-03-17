@@ -81,7 +81,14 @@ async function processBook(bookPath: string): Promise<void> {
       process.exit(1);
     }
   } catch (error) {
-    logger.error({ error }, 'Failed to process book');
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : '';
+    logger.error({ 
+      message: errorMsg, 
+      stack: errorStack,
+      error: String(error)
+    }, 'Failed to process book');
+    console.error('DEBUG Error:', error);
     process.exit(1);
   }
 }

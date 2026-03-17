@@ -1,6 +1,9 @@
 import { YouTubeScript, ScriptSection } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';
+import { config, outputDirs } from '../config/index.js';
 import OllamaClient from '../services/ollamaClient.js';
+import fs from 'fs';
+import path from 'path';
 
 const logger = createLogger('ScriptGenerator');
 
@@ -70,11 +73,15 @@ export class ScriptGenerator {
         'YouTube script generated successfully'
       );
 
+      // Save script to disk
+      const scriptPath = await this.saveScript(fullScript, generatedSections, bookTitle, totalWords, totalDuration);
+
       return {
         fullScript,
         wordCount: totalWords,
         sections: generatedSections,
         estimatedTotalDuration: totalDuration,
+        scriptPath,
       };
     } catch (error) {
       logger.error({ bookTitle, error }, 'Failed to generate YouTube script');
@@ -191,6 +198,52 @@ export class ScriptGenerator {
    */
   private wordsToSeconds(wordCount: number): number {
     return Math.round((wordCount / this.estimatedWPM) * 60);
+  }
+
+  /**
+   * Save script to disk as markdown file
+   */
+  private async saveScript(
+    fullScript: string,
+    sections: ScriptSection[],
+    bookTitle: string,
+    totalWords: number,
+    totalDuration: number
+  ): Promise<string> {
+    try {
+      // Create scripts directory if it doesn't exist
+      if (!fs.existsSync(outputDirs.scripts)) {
+        fs.mkdirSync(outputDirs.scripts, { recursive: true });
+      }
+
+      // Create metadata header
+      const timestamp = new Date().toISOString();
+      const filename = `${bookTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${Date.now()}.md`;
+      const filepath = path.join(outputDirs.scripts, filename);
+
+      // Build markdown content
+      let markdown = `# ${bookTitle} - YouTube Script\n\n`;
+      markdown += `**Generated:** ${timestamp}\n`;
+      markdown += `**Total Words:** ${totalWords}\n`;
+      markdown += `**Estimated Duration:** ${totalDuration} seconds (${Math.round(totalDuration / 60)} minutes)\n`;
+      markdown += `**Sections:** ${sections.length}\n\n`;
+
+      // Add each section
+      for (const section of sections) {
+        markdown += `## ${section.name}\n\n`;
+        markdown += `*Words: ${section.wordCount} | Duration: ${section.estimatedDurationSeconds}s*\n\n`;
+        markdown += section.content + '\n\n';
+      }
+
+      // Write to file
+      fs.writeFileSync(filepath, markdown, 'utf-8');
+
+      logger.info({ filePath: filepath }, 'Script saved to disk');
+      return filepath;
+    } catch (error) {
+      logger.error({ error }, 'Failed to save script');
+      throw error;
+    }
   }
 }
 

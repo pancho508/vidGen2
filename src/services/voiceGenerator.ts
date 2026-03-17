@@ -1,6 +1,7 @@
-import axios from 'axios';
+import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { createLogger } from '../utils/logger.js';
 import { config, outputDirs } from '../config/index.js';
 import { GeneratedAudio } from '../types/index.js';
@@ -8,21 +9,23 @@ import { GeneratedAudio } from '../types/index.js';
 const logger = createLogger('VoiceGenerator');
 
 /**
- * Generate voice narration using XTTS v2
+ * Generate voice narration using macOS built-in text-to-speech
  */
 export class VoiceGenerator {
-  private xttsUrl: string;
-  private maxChunkSize: number = 500; // Characters per chunk
+  private voice: string;
 
-  constructor(xttsUrl: string = config.xtts.url) {
-    this.xttsUrl = xttsUrl;
+  constructor(voice: string = 'Daniel') {
+    // Daniel: Professional masculine voice (en_GB)
+    // Moira: High quality feminine voice (en_IE)
+    // Victoria: Clear feminine voice (en_AU)
+    this.voice = voice;
   }
 
   /**
-   * Generate narration from script
+   * Generate narration from script using macOS say command
    */
   async generateNarration(script: string): Promise<GeneratedAudio> {
-    logger.info({ scriptLength: script.length }, 'Generating narration...');
+    logger.info({ scriptLength: script.length, voice: this.voice }, 'Generating narration...');
 
     try {
       // Create output directory if needed
@@ -30,129 +33,65 @@ export class VoiceGenerator {
         fs.mkdirSync(outputDirs.audio, { recursive: true });
       }
 
+      // Use temporary files for AIFF conversion
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vidgen-'));
+      const aiffPath = path.join(tempDir, 'narration.aiff');
       const outputPath = path.join(outputDirs.audio, 'narration.wav');
 
-      // Split script into chunks
-      const chunks = this.chunkText(script);
-      logger.info({ chunkCount: chunks.length }, 'Script chunked for processing');
-
-      // For testing, create a placeholder WAV file
-      // In production, this would call XTTS API
-      await this.createPlaceholderAudio(outputPath, script);
-
-      const durationSeconds = Math.round((script.split(/\s+/).length / 140) * 60); // 140 WPM
-
-      const audio: GeneratedAudio = {
-        path: outputPath,
-        durationSeconds,
-        sampleRate: 44100,
-        channels: 2,
-        timestamp: new Date(),
+      // Clean up temporary files
+      const cleanup = () => {
+        try {
+          if (fs.existsSync(aiffPath)) fs.unlinkSync(aiffPath);
+          if (fs.existsSync(tempDir)) fs.rmdirSync(tempDir);
+        } catch (e) {
+          logger.debug('Temp file cleanup skipped');
+        }
       };
 
-      logger.info({ outputPath, durationSeconds }, 'Narration generated successfully');
-      return audio;
+      try {
+        // Generate AIFF using macOS say command
+        logger.debug({ scriptLength: script.length }, 'Executing say command...');
+        const escapedScript = script.replace(/"/g, '\\"').replace(/\$/g, '\\$');
+        execSync(`say -v "${this.voice}" "${escapedScript}" -o "${aiffPath}"`, {
+          timeout: 120000,
+          stdio: 'pipe',
+        });
+
+        logger.debug({ aiffPath }, 'AIFF generated successfully');
+
+        // Convert AIFF to WAV using ffmpeg
+        logger.debug('Converting AIFF to WAV...');
+        execSync(`ffmpeg -i "${aiffPath}" "${outputPath}" -y 2>&1 | grep -v "frame="`, {
+          stdio: 'pipe',
+        });
+
+        logger.debug({ outputPath }, 'WAV conversion completed');
+
+        // Calculate duration
+        const wordCount = script.split(/\s+/).length;
+        const durationSeconds = Math.round((wordCount / 140) * 60); // 140 WPM
+
+        const audio: GeneratedAudio = {
+          path: outputPath,
+          durationSeconds,
+          sampleRate: 44100,
+          channels: 2,
+          timestamp: new Date(),
+        };
+
+        logger.info({ outputPath, durationSeconds, voice: this.voice }, 'Narration generated successfully');
+        cleanup();
+        return audio;
+      } catch (error) {
+        cleanup();
+        throw error;
+      }
     } catch (error) {
       logger.error({ error }, 'Failed to generate narration');
       throw error;
     }
   }
 
-  /**
-   * Chunk text at sentence boundaries
-   */
-  private chunkText(text: string): string[] {
-    const chunks: string[] = [];
-    const sentences = text.split(/(?<=[.!?])\s+/);
-
-    let currentChunk = '';
-
-    for (const sentence of sentences) {
-      if ((currentChunk + ' ' + sentence).length > this.maxChunkSize) {
-        if (currentChunk.length > 0) {
-          chunks.push(currentChunk.trim());
-        }
-        currentChunk = sentence;
-      } else {
-        currentChunk += (currentChunk ? ' ' : '') + sentence;
-      }
-    }
-
-    if (currentChunk.length > 0) {
-      chunks.push(currentChunk.trim());
-    }
-
-    return chunks;
-  }
-
-  /**
-   * Create a placeholder WAV file for testing
-   */
-  private async createPlaceholderAudio(outputPath: string, script: string): Promise<void> {
-    // Create minimal valid WAV file
-    // WAV format: RIFF header + fmt sub-chunk + data sub-chunk
-
-    const sampleRate = 44100;
-    const channels = 2;
-    const bitsPerSample = 16;
-    const byteRate = (sampleRate * channels * bitsPerSample) / 8;
-    const blockAlign = (channels * bitsPerSample) / 8;
-    const scriptLength = script.split(/\s+/).length;
-    const durationSeconds = Math.round((scriptLength / 140) * 60); // 140 WPM
-    const numSamples = sampleRate * durationSeconds;
-    const dataSize = numSamples * blockAlign;
-
-    // Create WAV header
-    const header = Buffer.alloc(44);
-    header.write('RIFF');
-    header.writeUInt32LE(36 + dataSize, 4); // File size - 8
-    header.write('WAVE', 8);
-    header.write('fmt ', 12);
-    header.writeUInt32LE(16, 16); // Subchunk1Size
-    header.writeUInt16LE(1, 20); // AudioFormat (PCM)
-    header.writeUInt16LE(channels, 22); // NumChannels
-    header.writeUInt32LE(sampleRate, 24); // SampleRate
-    header.writeUInt32LE(byteRate, 28); // ByteRate
-    header.writeUInt16LE(blockAlign, 32); // BlockAlign
-    header.writeUInt16LE(bitsPerSample, 34); // BitsPerSample
-    header.write('data', 36);
-    header.writeUInt32LE(dataSize, 40);
-
-    // Write silence data
-    const audioData = Buffer.alloc(dataSize, 0);
-
-    // Combine and write
-    const wavFile = Buffer.concat([header, audioData]);
-    fs.writeFileSync(outputPath, wavFile);
-
-    logger.debug({ path: outputPath, duration: durationSeconds }, 'Placeholder audio created');
-  }
-
-  /**
-   * Call XTTS API for real voice generation (production)
-   */
-  private async callXTTSAPI(text: string): Promise<Buffer> {
-    try {
-      const response = await axios.post(
-        `${this.xttsUrl}/tts_stream`,
-        {
-          text,
-          speaker_wav: '/path/to/reference/voice.wav', // Would use default or provided voice sample
-          language: 'en',
-        },
-        {
-          responseType: 'arraybuffer',
-          timeout: 60000,
-        }
-      );
-
-      logger.debug('XTTS API call successful');
-      return response.data as Buffer;
-    } catch (error) {
-      logger.error({ error }, 'Failed to call XTTS API');
-      throw error;
-    }
-  }
 }
 
 export default VoiceGenerator;
