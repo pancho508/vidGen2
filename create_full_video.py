@@ -113,9 +113,9 @@ def run_full_pipeline():
         probe_cmd = ['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
                     '-of', 'default=noprint_wrappers=1:nokey=1:noesc=1', str(audio_file)]
         duration_result = subprocess.run(probe_cmd, capture_output=True, text=True)
-        duration = float(duration_result.stdout.strip()) if duration_result.stdout else 540
+        actual_audio_duration = float(duration_result.stdout.strip()) if duration_result.stdout else 0
         
-        print(f"   Audio duration: {duration:.0f} seconds ({duration/60:.1f} minutes)")
+        print(f"   Actual audio duration: {actual_audio_duration:.0f} seconds ({actual_audio_duration/60:.1f} minutes)")
         
         # Create video with all images
         images = sorted(images_dir.glob('scene_*.png'))
@@ -123,8 +123,12 @@ def run_full_pipeline():
             print("   ❌ No images found")
             return False
         
-        # Calculate display time per image
-        time_per_image = duration / len(images)
+        # Target duration for the video (use audio or default)
+        target_duration = max(actual_audio_duration, 540)
+        
+        # Calculate display time per image based on target duration
+        time_per_image = target_duration / len(images)
+        print(f"   Target video duration: {target_duration:.0f} seconds ({target_duration/60:.1f} minutes)")
         print(f"   Display time per image: {time_per_image:.0f} seconds")
         print(f"   Creating MP4 with {len(images)} images...\n")
         
@@ -138,28 +142,53 @@ def run_full_pipeline():
             f.write(f"file '{images[-1]}'\n")
             f.write(f"duration {time_per_image}\n")
         
-        # FFmpeg command with faststart for streaming compatibility
+        # If audio is shorter than target, pad it with silence
+        audio_to_use = str(audio_file)
+        if actual_audio_duration < target_duration:
+            print(f"   ⚠️  Audio ({actual_audio_duration:.0f}s) shorter than target ({target_duration:.0f}s)")
+            print(f"   Padding audio with silence...")
+            
+            # Create padded audio
+            padded_audio = root / 'audio' / 'narration_padded.wav'
+            pad_duration = target_duration - actual_audio_duration
+            
+            # FFmpeg pad with silence at end
+            pad_cmd = [
+                'ffmpeg', '-y',
+                '-i', str(audio_file),
+                '-af', f"apad=whole_len={int(target_duration)}:pad_dur={pad_duration}",
+                str(padded_audio)
+            ]
+            subprocess.run(pad_cmd, check=True, capture_output=True, timeout=60)
+            audio_to_use = str(padded_audio)
+            print(f"   ✅ Audio padded to {target_duration:.0f}s\n")
+        
+        # FFmpeg command - REMOVED -shortest flag to keep full audio
         cmd = [
             'ffmpeg', '-y',
             '-f', 'concat', '-safe', '0', '-i', concat_file,
-            '-i', str(audio_file),
+            '-i', audio_to_use,
             '-c:v', 'libx264', '-preset', 'fast',
             '-pix_fmt', 'yuv420p',
             '-c:a', 'aac',
-            '-shortest',
             '-movflags', '+faststart',
             str(video_file)
         ]
         
-        print("   Running FFmpeg with faststart flag...\n")
+        print("   Running FFmpeg (audio will play fully)...\n")
         subprocess.run(cmd, check=True, timeout=300)
+        
+        # Clean up temporary files
+        if os.path.exists(concat_file):
+            os.remove(concat_file)
+        if 'padded_audio' in locals() and os.path.exists(padded_audio):
+            os.remove(padded_audio)
         
         if video_file.exists():
             video_size = video_file.stat().st_size / 1024 / 1024
             print(f"   ✅ Video created: {video_size:.1f} MB")
             print(f"   📁 Location: {video_file}\n")
             
-            os.remove(concat_file)
             return True
         else:
             print(f"   ❌ Video file not created")
